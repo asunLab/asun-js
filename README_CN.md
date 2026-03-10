@@ -5,6 +5,8 @@
 
 零依赖 JavaScript/TypeScript 库，用于 **ASON**（Array-Schema Object Notation）—— 一种面向 LLM 交互和大规模数据传输的 token 高效、模式驱动数据格式。
 
+`ason-js` 是官方的 JS/TS 运行时包，同时适用于 JavaScript 和 TypeScript 用户。它在一个包内同时提供 ESM/CJS 构建产物和 `.d.ts` 类型声明，因此不需要再单独安装 `ason-ts`。
+
 支持**浏览器**、**Node.js**、**Deno**、**Bun** 以及任何 JS 框架：**Vue**、**React**、**Svelte**、**SolidJS** 等。
 
 [English Documentation](README.md)

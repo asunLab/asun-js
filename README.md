@@ -5,6 +5,8 @@
 
 Zero-dependency JavaScript/TypeScript library for **ASON** (Array-Schema Object Notation) — a token-efficient, schema-driven data format for LLM interactions and large-scale data transfer.
 
+`ason-js` is the official runtime for both JavaScript and TypeScript users. It ships ESM/CJS builds and bundled `.d.ts` type declarations in a single package, so there is no separate `ason-ts` package to install.
+
 Works in **browsers**, **Node.js**, **Deno**, **Bun** and any JS framework: **Vue**, **React**, **Svelte**, **SolidJS**, etc.
 
 [中文文档](README_CN.md)
