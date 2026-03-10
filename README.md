@@ -43,6 +43,8 @@ npm install ason-js
 
 Or copy `dist/ason.min.js` directly into a web page (exposes a global `ASON` object).
 
+TypeScript users do not need a separate stub package. `npm run build` emits `dist/index.d.ts`, and the package exports it via the `types` field.
+
 ---
 
 ## Quick start
@@ -196,7 +198,7 @@ Little-endian layout, byte-identical to ason-rs and ason-go:
 
 ```bash
 npm install
-npm run build    # generates dist/index.js, dist/index.cjs, dist/ason.min.js
+npm run build    # generates dist/index.js, dist/index.cjs, dist/index.d.ts, dist/ason.min.js
 npm test         # vitest, 40 tests
 ```
 

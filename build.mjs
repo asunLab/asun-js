@@ -32,4 +32,4 @@ await esbuild.build({
   minify: true,
 });
 
-console.log('Build complete: dist/index.js  dist/index.cjs  dist/ason.min.js');
+console.log('Build complete: dist/index.js  dist/index.cjs  dist/index.d.ts  dist/ason.min.js');

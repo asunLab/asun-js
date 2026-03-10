@@ -43,6 +43,8 @@ npm install ason-js
 
 或直接将 `dist/ason.min.js` 复制到网页中使用（暴露全局 `ASON` 对象）。
 
+TypeScript 用户不需要单独安装 stub 包。`npm run build` 会生成 `dist/index.d.ts`，并通过包的 `types` 字段对外导出。
+
 ---
 
 ## 快速开始
@@ -207,7 +209,7 @@ export function useAsonCodec(schema: string) {
 
 ```bash
 npm install
-npm run build    # 生成 dist/index.js、dist/index.cjs、dist/ason.min.js
+npm run build    # 生成 dist/index.js、dist/index.cjs、dist/index.d.ts、dist/ason.min.js
 npm test         # vitest，40 个测试
 ```
 
