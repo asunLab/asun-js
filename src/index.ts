@@ -218,16 +218,9 @@ function parseSchemaInner(schema: string): ParsedSchema {
       pos++; // consume ':'
       skip();
       if (pos < n && (schema[pos] === '{' || schema[pos] === '[' || schema[pos] === '<')) {
-        const open = schema[pos]; const close = open === '{' ? '}' : (open === '[' ? ']' : '>');
-        let depth = 0;
-        while (pos < n) {
-          if (schema[pos] === open) depth++;
-          else if (schema[pos] === close) { depth--; if (depth === 0) { pos++; break; } }
-          pos++;
-        }
-        typePart = schema.slice(ns, pos).split(':')[1]?.trim() || 'str'; // approximation for inner typePart
-        // We really just matched `<...>`, so the typePart is whatever we skipped
-        typePart = schema.slice(schema.indexOf(':', ns) + 1, pos).trim();
+        const scanned = scanTypeExpr(schema, pos);
+        typePart = scanned.typeExpr;
+        pos = scanned.end;
       } else {
         const ts = pos;
         while (pos < n && schema[pos] !== ',' && schema[pos] !== '}' && schema[pos] !== ' ' && schema[pos] !== '\t') pos++;
@@ -330,6 +323,63 @@ function stripOptional(typeExpr: string): { inner: string; optional: boolean } {
   return typeExpr.endsWith('?')
     ? { inner: typeExpr.slice(0, -1), optional: true }
     : { inner: typeExpr, optional: false };
+}
+
+function scanBalanced(src: string, pos: number, open: string, close: string): number {
+  let depth = 0;
+  while (pos < src.length) {
+    const c = src[pos]!;
+    if (c === open) depth++;
+    else if (c === close) {
+      depth--;
+      if (depth === 0) return pos + 1;
+    }
+    pos++;
+  }
+  return pos;
+}
+
+function scanTypeExpr(src: string, pos: number): { typeExpr: string; end: number } {
+  if (pos >= src.length) return { typeExpr: 'str', end: pos };
+  const c = src[pos]!;
+  if (c === '{') {
+    const end = scanBalanced(src, pos, '{', '}');
+    return { typeExpr: src.slice(pos, end), end };
+  }
+  if (c === '[') {
+    const end = scanBalanced(src, pos, '[', ']');
+    return { typeExpr: src.slice(pos, end), end };
+  }
+  if (c === '<') {
+    const end = scanBalanced(src, pos, '<', '>');
+    return { typeExpr: src.slice(pos, end), end };
+  }
+  const start = pos;
+  while (pos < src.length && src[pos] !== ',' && src[pos] !== '}' && src[pos] !== ' ' && src[pos] !== '\t') pos++;
+  return { typeExpr: src.slice(start, pos), end: pos };
+}
+
+function parseScalarToken(token: string): string | number | boolean | undefined {
+  if (token === 'true') return true;
+  if (token === 'false') return false;
+  let i = 0;
+  if (token[0] === '-') i = 1;
+  let seenDigit = false;
+  let seenDot = false;
+  for (; i < token.length; i++) {
+    const c = token.charCodeAt(i);
+    if (c >= 48 && c <= 57) {
+      seenDigit = true;
+      continue;
+    }
+    if (c === 46 && !seenDot) {
+      seenDot = true;
+      continue;
+    }
+    return undefined;
+  }
+  if (!seenDigit) return undefined;
+  return seenDot ? Number.parseFloat(token) : Number.parseInt(token, 10);
 }
 
 function encodeGenericValue(val: unknown): string {
@@ -761,15 +811,9 @@ class Decoder {
         this.pos++;
         this.skip();
         if (this.pos < s.length && (s[this.pos] === '{' || s[this.pos] === '[' || s[this.pos] === '<')) {
-          const open = s[this.pos]; const close = open === '{' ? '}' : (open === '[' ? ']' : '>');
-          let depth = 0;
-          const ts = this.pos;
-          while (this.pos < s.length) {
-            if (s[this.pos] === open) depth++;
-            else if (s[this.pos] === close) { depth--; if (depth === 0) { this.pos++; break; } }
-            this.pos++;
-          }
-          typePart = s.slice(ts, this.pos);
+          const scanned = scanTypeExpr(s, this.pos);
+          typePart = scanned.typeExpr;
+          this.pos = scanned.end;
         } else {
           const ts = this.pos;
           while (this.pos < s.length && s[this.pos] !== ',' && s[this.pos] !== '}' && s[this.pos] !== ' ' && s[this.pos] !== '\t') this.pos++;
@@ -845,8 +889,8 @@ class Decoder {
     if (s.startsWith('false', this.pos)) return this.parseBool();
     const token = this.parsePlainToken([',', ')', ']', '>']).trim();
     if (token === '') return null;
-    if (/^-?[0-9]+$/.test(token)) return Number.parseInt(token, 10);
-    if (/^-?(?:[0-9]+\.[0-9]+|[0-9]+\.)$/.test(token)) return Number.parseFloat(token);
+    const scalar = parseScalarToken(token);
+    if (scalar !== undefined) return scalar;
     return token.includes('\\') ? unescapePlain(token) : token;
   }
 
