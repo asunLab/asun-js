@@ -39,14 +39,14 @@ function printCase(label, stats) {
   console.log(`  ${label}`);
   console.log(
     `    Serialize:   JSON ${fmtMs(stats.jsonSerMs)}${`/${fmtBytes(stats.jsonSize)}`.padEnd(12)} | ` +
-    `ASON ${fmtMs(stats.asonSerMs)}(${fmtRatio(stats.jsonSerMs, stats.asonSerMs)})/` +
-    `${fmtBytes(stats.asonSize)}(${fmtPct(stats.asonSize, stats.jsonSize)}) | ` +
+    `ASUN ${fmtMs(stats.asunSerMs)}(${fmtRatio(stats.jsonSerMs, stats.asunSerMs)})/` +
+    `${fmtBytes(stats.asunSize)}(${fmtPct(stats.asunSize, stats.jsonSize)}) | ` +
     `BIN ${fmtMs(stats.binSerMs)}(${fmtRatio(stats.jsonSerMs, stats.binSerMs)})/` +
     `${fmtBytes(stats.binSize)}(${fmtPct(stats.binSize, stats.jsonSize)})`
   );
   console.log(
     `    Deserialize: JSON ${fmtMs(stats.jsonDeMs)} | ` +
-    `ASON ${fmtMs(stats.asonDeMs)}(${fmtRatio(stats.jsonDeMs, stats.asonDeMs)}) | ` +
+    `ASUN ${fmtMs(stats.asunDeMs)}(${fmtRatio(stats.jsonDeMs, stats.asunDeMs)}) | ` +
     `BIN ${fmtMs(stats.binDeMs)}(${fmtRatio(stats.jsonDeMs, stats.binDeMs)})`
   );
 }
@@ -108,24 +108,24 @@ const SINGLE_BIN_SCHEMA = '{id@int,name@str,email@str,score@float,active@bool,de
 
 function runCase(rows, schema, loops) {
   const jsonText = JSON.stringify(rows);
-  const asonText = encodeTyped(rows);
+  const asunText = encodeTyped(rows);
   const binData = encodeBinary(rows);
 
   return {
     jsonSerMs: measureMs(() => JSON.stringify(rows), loops),
-    asonSerMs: measureMs(() => encodeTyped(rows), loops),
+    asunSerMs: measureMs(() => encodeTyped(rows), loops),
     binSerMs: measureMs(() => encodeBinary(rows), loops),
     jsonDeMs: measureMs(() => JSON.parse(jsonText), loops),
-    asonDeMs: measureMs(() => decode(asonText), loops),
+    asunDeMs: measureMs(() => decode(asunText), loops),
     binDeMs: measureMs(() => decodeBinary(binData, schema), loops),
     jsonSize: jsonText.length,
-    asonSize: asonText.length,
+    asunSize: asunText.length,
     binSize: binData.length,
   };
 }
 
 console.log('\n╔══════════════════════════════════════════════════════════════════╗');
-console.log('║ ASON JS Benchmark                                               ║');
+console.log('║ ASUN JS Benchmark                                               ║');
 console.log('╚══════════════════════════════════════════════════════════════════╝');
 
 box('1: Flat Struct (8 fields, vec)');
@@ -151,18 +151,18 @@ box('4: Single Struct Roundtrip');
 {
   const row = makeFlatRows(1)[0];
   const jsonText = JSON.stringify(row);
-  const asonText = encodeTyped(row);
+  const asunText = encodeTyped(row);
   const binData = encodeBinary(row);
   const loops = 10000;
   printCase('Single flat struct × 10000 (8 fields)', {
     jsonSerMs: measureMs(() => JSON.stringify(row), loops),
-    asonSerMs: measureMs(() => encodeTyped(row), loops),
+    asunSerMs: measureMs(() => encodeTyped(row), loops),
     binSerMs: measureMs(() => encodeBinary(row), loops),
     jsonDeMs: measureMs(() => JSON.parse(jsonText), loops),
-    asonDeMs: measureMs(() => decode(asonText), loops),
+    asunDeMs: measureMs(() => decode(asunText), loops),
     binDeMs: measureMs(() => decodeBinary(binData, SINGLE_BIN_SCHEMA), loops),
     jsonSize: jsonText.length,
-    asonSize: asonText.length,
+    asunSize: asunText.length,
     binSize: binData.length,
   });
 }
@@ -177,37 +177,37 @@ box('6: Throughput Summary');
 {
   const rows = makeFlatRows(1000);
   const jsonText = JSON.stringify(rows);
-  const asonText = encodeTyped(rows);
+  const asunText = encodeTyped(rows);
   const binData = encodeBinary(rows);
   const loops = 100;
 
   const jsonSerMs = measureMs(() => JSON.stringify(rows), loops);
-  const asonSerMs = measureMs(() => encodeTyped(rows), loops);
+  const asunSerMs = measureMs(() => encodeTyped(rows), loops);
   const binSerMs = measureMs(() => encodeBinary(rows), loops);
   const jsonDeMs = measureMs(() => JSON.parse(jsonText), loops);
-  const asonDeMs = measureMs(() => decode(asonText), loops);
+  const asunDeMs = measureMs(() => decode(asunText), loops);
   const binDeMs = measureMs(() => decodeBinary(binData, FLAT_BIN_SCHEMA), loops);
 
   const jsonSerRps = Math.round((rows.length * loops) / (jsonSerMs / 1000));
-  const asonSerRps = Math.round((rows.length * loops) / (asonSerMs / 1000));
+  const asunSerRps = Math.round((rows.length * loops) / (asunSerMs / 1000));
   const binSerRps = Math.round((rows.length * loops) / (binSerMs / 1000));
   const jsonDeRps = Math.round((rows.length * loops) / (jsonDeMs / 1000));
-  const asonDeRps = Math.round((rows.length * loops) / (asonDeMs / 1000));
+  const asunDeRps = Math.round((rows.length * loops) / (asunDeMs / 1000));
   const binDeRps = Math.round((rows.length * loops) / (binDeMs / 1000));
 
   console.log(
     `  Serialize throughput:   JSON ${jsonSerRps.toLocaleString().padStart(12)} rec/s | ` +
-    `ASON ${asonSerRps.toLocaleString().padStart(12)} rec/s (${fmtRatio(asonSerRps, jsonSerRps)}) | ` +
+    `ASUN ${asunSerRps.toLocaleString().padStart(12)} rec/s (${fmtRatio(asunSerRps, jsonSerRps)}) | ` +
     `BIN ${binSerRps.toLocaleString().padStart(12)} rec/s (${fmtRatio(binSerRps, jsonSerRps)})`
   );
   console.log(
     `  Deserialize throughput: JSON ${jsonDeRps.toLocaleString().padStart(12)} rec/s | ` +
-    `ASON ${asonDeRps.toLocaleString().padStart(12)} rec/s (${fmtRatio(asonDeRps, jsonDeRps)}) | ` +
+    `ASUN ${asunDeRps.toLocaleString().padStart(12)} rec/s (${fmtRatio(asunDeRps, jsonDeRps)}) | ` +
     `BIN ${binDeRps.toLocaleString().padStart(12)} rec/s (${fmtRatio(binDeRps, jsonDeRps)})`
   );
   console.log(
     `  Size baseline (1k rows): JSON ${fmtBytes(jsonText.length)} | ` +
-    `ASON ${fmtBytes(asonText.length)}(${fmtPct(asonText.length, jsonText.length)}) | ` +
+    `ASUN ${fmtBytes(asunText.length)}(${fmtPct(asunText.length, jsonText.length)}) | ` +
     `BIN ${fmtBytes(binData.length)}(${fmtPct(binData.length, jsonText.length)})`
   );
 }

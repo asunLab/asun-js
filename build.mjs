@@ -1,4 +1,4 @@
-// build.mjs — esbuild bundler for ason-js
+// build.mjs — esbuild bundler for asun-js
 import * as esbuild from 'esbuild';
 
 // ESM bundle
@@ -27,9 +27,9 @@ await esbuild.build({
   bundle: true,
   platform: 'browser',
   format: 'iife',
-  globalName: 'ASON',
-  outfile: 'dist/ason.min.js',
+  globalName: 'ASUN',
+  outfile: 'dist/asun.min.js',
   minify: true,
 });
 
-console.log('Build complete: dist/index.js  dist/index.cjs  dist/index.d.ts  dist/ason.min.js');
+console.log('Build complete: dist/index.js  dist/index.cjs  dist/index.d.ts  dist/asun.min.js');

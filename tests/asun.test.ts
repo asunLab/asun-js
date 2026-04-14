@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
-  AsonError,
+  AsunError,
   decode,
   decodeBinary,
   encode,
@@ -124,11 +124,11 @@ describe('string handling', () => {
   });
 
   it('rejects invalid schema types', () => {
-    expect(() => decode('{id@numx,name@str}:(1,Alice)')).toThrow(AsonError);
-    expect(() => decode('{id@int,name@textx}:(1,Alice)')).toThrow(AsonError);
-    expect(() => decode('{score@decimalx}:(3.5)')).toThrow(AsonError);
-    expect(() => decode('{active@flagx}:(true)')).toThrow(AsonError);
-    expect(() => decode('{tags@[textx]}:([Alice])')).toThrow(AsonError);
+    expect(() => decode('{id@numx,name@str}:(1,Alice)')).toThrow(AsunError);
+    expect(() => decode('{id@int,name@textx}:(1,Alice)')).toThrow(AsunError);
+    expect(() => decode('{score@decimalx}:(3.5)')).toThrow(AsunError);
+    expect(() => decode('{active@flagx}:(true)')).toThrow(AsunError);
+    expect(() => decode('{tags@[textx]}:([Alice])')).toThrow(AsunError);
   });
 });
 
@@ -166,7 +166,7 @@ describe('binary roundtrip', () => {
     const padded = new Uint8Array(data.length + 1);
     padded.set(data);
     padded[data.length] = 0xff;
-    expect(() => decodeBinary(padded, '{x@int}')).toThrow(AsonError);
+    expect(() => decodeBinary(padded, '{x@int}')).toThrow(AsunError);
   });
 
   it('roundtrips binary with quoted schema field names', () => {
@@ -178,19 +178,19 @@ describe('binary roundtrip', () => {
 
 describe('legacy syntax rejection', () => {
   it('rejects multiple tuples after a single-row schema', () => {
-    expect(() => decode('{id@int,name@str}:(101,Alice),(102,Bob)')).toThrow(AsonError);
+    expect(() => decode('{id@int,name@str}:(101,Alice),(102,Bob)')).toThrow(AsunError);
   });
 
   it('rejects legacy colon type annotations', () => {
-    expect(() => decode('{id:int}:\n(1)\n')).toThrow(AsonError);
+    expect(() => decode('{id:int}:\n(1)\n')).toThrow(AsunError);
   });
 
   it('rejects legacy map schemas in text decode', () => {
-    expect(() => decode('{attrs@<str:int>}:\n(<age:30>)\n')).toThrow(AsonError);
+    expect(() => decode('{attrs@<str:int>}:\n(<age:30>)\n')).toThrow(AsunError);
   });
 
   it('rejects legacy map schemas in binary decode', () => {
-    expect(() => decodeBinary(new Uint8Array(0), '{attrs@<str:int>}')).toThrow(AsonError);
+    expect(() => decodeBinary(new Uint8Array(0), '{attrs@<str:int>}')).toThrow(AsunError);
   });
 });
 

@@ -1,5 +1,5 @@
 import {
-  AsonError,
+  AsunError,
   decode,
   decodeBinary,
   encode,
@@ -36,7 +36,7 @@ function throws(label, fn) {
   }
 }
 
-console.log('\n=== ason-js complex examples ===\n');
+console.log('\n=== asun-js complex examples ===\n');
 
 console.log('1. Flat struct');
 eq('flat roundtrip', decode(encodeTyped({ id: 1, name: 'Alice', active: true })), {
@@ -164,8 +164,8 @@ console.log('12. Large flat slice');
   const json = JSON.stringify(rows);
   const typedPct = ((typed.length / json.length) * 100).toFixed(1);
   const untypedPct = ((untyped.length / json.length) * 100).toFixed(1);
-  console.log(`   ASON typed:   ${typed.length} B (${typedPct}%)`);
-  console.log(`   ASON untyped: ${untyped.length} B (${untypedPct}%)`);
+  console.log(`   ASUN typed:   ${typed.length} B (${typedPct}%)`);
+  console.log(`   ASUN untyped: ${untyped.length} B (${untypedPct}%)`);
   console.log(`   JSON:         ${json.length} B`);
   eq('1000-row last item', decode(typed)[999], rows[999]);
 }
@@ -210,9 +210,9 @@ console.log('15. Error type');
 {
   try {
     decode('{attrs@<str:int>}:\n(<age:30>)\n');
-    ok('AsonError shape', false);
+    ok('AsunError shape', false);
   } catch (err) {
-    ok('AsonError shape', err instanceof AsonError);
+    ok('AsunError shape', err instanceof AsunError);
   }
 }
 

@@ -19,7 +19,7 @@ function check(label, got, expected) {
   if (ok) passed++;
 }
 
-console.log('\n=== ason-js basic examples ===\n');
+console.log('\n=== asun-js basic examples ===\n');
 
 console.log('1. Flat struct (typed)');
 {
