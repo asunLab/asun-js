@@ -177,13 +177,12 @@ const rows = decodeBinary(data, "[{id@int, name@str}]");
 | Schema type | JS value                      | Example                  |
 | ----------- | ----------------------------- | ------------------------ |
 | `int`       | number (integer)              | `42`, `-100`             |
-| `uint`      | number (non-negative integer) | `0`, `9007199254740991`  |
 | `float`     | number                        | `3.14`, `-0.5`           |
 | `bool`      | `true` / `false`              | `true`, `false`          |
 | `str`       | text                          | `Alice`, `"Carol Smith"` |
 | `T?`        | value or `null`               | `hello` / `null`         |
 
-Optional fields: append `?` to any type (`str?`, `int?`, `float?`, `bool?`, `uint?`).
+Optional fields: append `?` to any type (`str?`, `int?`, `float?`, `bool?`).
 
 ---
 
@@ -231,7 +230,6 @@ Little-endian layout, byte-identical to asun-rs and asun-go:
 | Type     | Bytes                                  |
 | -------- | -------------------------------------- |
 | `int`    | 8 (i64 LE)                             |
-| `uint`   | 8 (u64 LE)                             |
 | `float`  | 8 (f64 LE)                             |
 | `bool`   | 1                                      |
 | `str`    | 4-byte length LE + UTF-8 bytes         |

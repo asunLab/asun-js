@@ -173,13 +173,12 @@ const rows = decodeBinary(data, "[{id@int, name@str}]");
 | Schema 类型 | JS 值              | 示例                     |
 | ----------- | ------------------ | ------------------------ |
 | `int`       | number（整数）     | `42`、`-100`             |
-| `uint`      | number（非负整数） | `0`、`9007199254740991`  |
 | `float`     | number             | `3.14`、`-0.5`           |
 | `bool`      | `true` / `false`   | `true`、`false`          |
 | `str`       | 文本               | `Alice`、`"Carol Smith"` |
 | `T?`        | 值或 `null`        | `hello` / `null`         |
 
-可选字段：在任何类型后加 `?`（`str?`、`int?`、`float?`、`bool?`、`uint?`）。
+可选字段：在任何类型后加 `?`（`str?`、`int?`、`float?`、`bool?`）。
 
 ---
 
@@ -241,7 +240,6 @@ export function useAsunCodec() {
 | 类型    | 字节数                           |
 | ------- | -------------------------------- |
 | `int`   | 8（i64 LE）                      |
-| `uint`  | 8（u64 LE）                      |
 | `float` | 8（f64 LE）                      |
 | `bool`  | 1                                |
 | `str`   | 4 字节长度（LE）+ UTF-8 字节     |

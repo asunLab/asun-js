@@ -21,7 +21,7 @@
 export type AsunObj = Record<string, unknown>;
 export type AsunResult = AsunObj | AsunObj[];
 
-type BaseType = "int" | "uint" | "float" | "bool" | "str" | "list" | "struct" | "auto";
+type BaseType = "int" | "float" | "bool" | "str" | "list" | "struct" | "auto";
 
 interface Field {
   name: string;
@@ -69,7 +69,6 @@ function baseTypeFromExpr(typeExpr: string): BaseType {
   if (typeExpr.startsWith("{")) return "struct";
   if (
     typeExpr === "int" ||
-    typeExpr === "uint" ||
     typeExpr === "float" ||
     typeExpr === "bool" ||
     typeExpr === "str"
@@ -528,7 +527,6 @@ function encodeByTypeExpr(
     case "bool":
       return val ? "true" : "false";
     case "int":
-    case "uint":
       return String(typeof val === "bigint" ? val : Math.trunc(Number(val)));
     case "float":
       return formatFloat(Number(val));
@@ -950,8 +948,6 @@ class Decoder {
         return this.parseBool();
       case "int":
         return this.parseInt();
-      case "uint":
-        return this.parseUint();
       case "float":
         return this.parseFloat();
       case "str": {
@@ -1106,24 +1102,6 @@ class Decoder {
     }
     if (this.pos === start) this.err(`invalid int`);
     return neg ? -v : v;
-  }
-
-  parseUint(): number | null {
-    if (
-      this.pos >= this.src.length ||
-      [",", ")", "]"].includes(this.src[this.pos]!)
-    )
-      return null;
-    const start = this.pos;
-    let v = 0;
-    while (this.pos < this.src.length) {
-      const c = this.src.charCodeAt(this.pos);
-      if (c < 48 || c > 57) break;
-      v = v * 10 + (c - 48);
-      this.pos++;
-    }
-    if (this.pos === start) this.err(`invalid uint`);
-    return v;
   }
 
   parseFloat(): number | null {
@@ -1326,7 +1304,6 @@ function writeBinByTypeExpr(
       writer.push(value ? 1 : 0);
       break;
     case "int":
-    case "uint":
       writer.pushI64LE(value as number | bigint);
       break;
     case "float":
@@ -1392,12 +1369,6 @@ function readI64LE(view: DataView, pos: number): number {
   return Number((BigInt(hi) << 32n) | BigInt(lo));
 }
 
-function readU64LE(view: DataView, pos: number): number {
-  const lo = view.getUint32(pos, true);
-  const hi = view.getUint32(pos + 4, true);
-  return Number((BigInt(hi) << 32n) | BigInt(lo));
-}
-
 class BinDecoder {
   view: DataView;
   pos = 0;
@@ -1429,11 +1400,6 @@ class BinDecoder {
         return this.view.getUint8(this.pos++) !== 0;
       case "int": {
         const value = readI64LE(this.view, this.pos);
-        this.pos += 8;
-        return value;
-      }
-      case "uint": {
-        const value = readU64LE(this.view, this.pos);
         this.pos += 8;
         return value;
       }

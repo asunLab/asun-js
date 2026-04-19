@@ -1,6 +1,6 @@
 {
   "name": "@athanx/asun",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "ASUN (Array-Schema Unified Notation) – high-performance, schema-driven data format for JS/TS",
   "license": "MIT",
   "type": "module",

@@ -129,6 +129,7 @@ describe('string handling', () => {
     expect(() => decode('{score@decimalx}:(3.5)')).toThrow(AsunError);
     expect(() => decode('{active@flagx}:(true)')).toThrow(AsunError);
     expect(() => decode('{tags@[textx]}:([Alice])')).toThrow(AsunError);
+    expect(() => decode('{id@uint}:(1)')).toThrow(AsunError);
   });
 });
 
