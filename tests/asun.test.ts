@@ -177,21 +177,17 @@ describe('binary roundtrip', () => {
   });
 });
 
-describe('legacy syntax rejection', () => {
+describe('unsupported syntax rejection', () => {
   it('rejects multiple tuples after a single-row schema', () => {
     expect(() => decode('{id@int,name@str}:(101,Alice),(102,Bob)')).toThrow(AsunError);
   });
 
-  it('rejects legacy colon type annotations', () => {
-    expect(() => decode('{id:int}:\n(1)\n')).toThrow(AsunError);
+  it('rejects invalid schema types in text decode', () => {
+    expect(() => decode('{attrs@dict}:\n(value)\n')).toThrow(AsunError);
   });
 
-  it('rejects legacy map schemas in text decode', () => {
-    expect(() => decode('{attrs@<str:int>}:\n(<age:30>)\n')).toThrow(AsunError);
-  });
-
-  it('rejects legacy map schemas in binary decode', () => {
-    expect(() => decodeBinary(new Uint8Array(0), '{attrs@<str:int>}')).toThrow(AsunError);
+  it('rejects invalid schema types in binary decode', () => {
+    expect(() => decodeBinary(new Uint8Array(0), '{attrs@dict}')).toThrow(AsunError);
   });
 });
 

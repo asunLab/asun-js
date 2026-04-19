@@ -3,13 +3,40 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![npm](https://img.shields.io/badge/npm-%40athanx%2Fasun-blue)](https://www.npmjs.com/package/@athanx/asun)
 
+## Why ASUN?
+
+**json**
+
+Standard JSON repeats every field name in every record. When you send structured data to an LLM, over an API, or across services, that repetition wastes tokens, bytes, and attention:
+
+```json
+[
+  { "id": 1, "name": "Alice", "active": true },
+  { "id": 2, "name": "Bob", "active": false },
+  { "id": 3, "name": "Carol", "active": true }
+]
+```
+
+**asun**
+
+ASUN declares the schema **once** and streams data as compact tuples:
+
+```asun
+[{id, name, active}]:
+  (1,Alice,true),
+  (2,Bob,false),
+  (3,Carol,true)
+```
+
+**Fewer tokens. Smaller payloads. Clearer structure, and faster parsing than repeated-object JSON.**
+
+---
+
 Zero-dependency JavaScript/TypeScript library for **ASUN** (Array-Schema Unified Notation) — a token-efficient, schema-driven data format for LLM interactions and large-scale data transfer.
 
 `@athanx/asun` is the official runtime for both JavaScript and TypeScript users. It ships ESM/CJS builds and bundled `.d.ts` type declarations in a single package, so there is no separate `asun-ts` package to install.
 
 Works in **browsers**, **Node.js**, **Deno**, **Bun** and any JS framework: **Vue**, **React**, **Svelte**, **SolidJS**, etc.
-
-Legacy `<k:v>` map syntax is no longer supported. Key-value collections should be modeled as entry lists such as `attrs@[{key@str,value@int}]`.
 
 [中文文档](README_CN.md)
 
@@ -174,13 +201,13 @@ const rows = decodeBinary(data, "[{id@int, name@str}]");
 
 ## Supported types
 
-| Schema type | JS value                      | Example                  |
-| ----------- | ----------------------------- | ------------------------ |
-| `int`       | number (integer)              | `42`, `-100`             |
-| `float`     | number                        | `3.14`, `-0.5`           |
-| `bool`      | `true` / `false`              | `true`, `false`          |
-| `str`       | text                          | `Alice`, `"Carol Smith"` |
-| `T?`        | value or `null`               | `hello` / `null`         |
+| Schema type | JS value         | Example                  |
+| ----------- | ---------------- | ------------------------ |
+| `int`       | number (integer) | `42`, `-100`             |
+| `float`     | number           | `3.14`, `-0.5`           |
+| `bool`      | `true` / `false` | `true`, `false`          |
+| `str`       | text             | `Alice`, `"Carol Smith"` |
+| `T?`        | value or `null`  | `hello` / `null`         |
 
 Optional fields: append `?` to any type (`str?`, `int?`, `float?`, `bool?`).
 

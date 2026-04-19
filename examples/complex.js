@@ -145,10 +145,9 @@ console.log('10. Binary nested slice');
   eq('binary nested slice', decodeBinary(encodeBinary(rows), schema), rows);
 }
 
-console.log('11. Legacy syntax rejection');
-throws('reject legacy colon schema', () => decode('{id:int}:\n(1)\n'));
-throws('reject legacy map schema', () => decode('{attrs@<str:int>}:\n(<age:30>)\n'));
-throws('reject legacy map schema in binary', () => decodeBinary(new Uint8Array(0), '{attrs@<str:int>}'));
+console.log('11. Invalid schema rejection');
+throws('reject invalid schema type', () => decode('{attrs@dict}:\n(value)\n'));
+throws('reject invalid binary schema type', () => decodeBinary(new Uint8Array(0), '{attrs@dict}'));
 
 console.log('12. Large flat slice');
 {
@@ -209,7 +208,7 @@ console.log('14. Binary trailing bytes');
 console.log('15. Error type');
 {
   try {
-    decode('{attrs@<str:int>}:\n(<age:30>)\n');
+    decode('{attrs@dict}:\n(value)\n');
     ok('AsunError shape', false);
   } catch (err) {
     ok('AsunError shape', err instanceof AsunError);

@@ -13,7 +13,6 @@
  * Rules:
  *   - Text schema uses `@` type annotations.
  *   - Complex fields must keep `@{...}` / `@[...]` structural markers.
- *   - Legacy `<k:v>` map syntax is not supported.
  *   - Binary decode still requires an explicit schema because binary payloads
  *     do not embed type information.
  */
@@ -249,11 +248,6 @@ function scanStructSchema(
 
     skip();
     let typeExpr = "auto";
-    if (pos < n && src[pos] === ":") {
-      throw new AsunError(
-        `legacy ':' type annotations are not supported; use '@'`,
-      );
-    }
     if (pos < n && src[pos] === "@") {
       pos++;
       skip();
@@ -332,8 +326,7 @@ function scanTypeExpr(
 ): { typeExpr: string; end: number } {
   if (start >= src.length) return { typeExpr: "str", end: start };
   const c = src[start]!;
-  if (c === "<")
-    throw new AsunError(`legacy map syntax '<...>' is not supported`);
+  if (c === "<") throw new AsunError(`unsupported schema syntax`);
   if (c === "{") {
     let end = scanBalanced(src, start, "{", "}");
     if (src[end] === "?") end++;
@@ -356,7 +349,7 @@ function scanTypeExpr(
     src[end] !== "\r"
   ) {
     if (src[end] === "<")
-      throw new AsunError(`legacy map syntax '<...>' is not supported`);
+      throw new AsunError(`unsupported schema syntax`);
     end++;
   }
   return { typeExpr: src.slice(start, end), end };
@@ -972,7 +965,7 @@ class Decoder {
       return null;
     const c = this.src[this.pos]!;
     if (c === '"') return this.parseQuotedString();
-    if (c === "<") this.err(`legacy map syntax '<...>' is not supported`);
+    if (c === "<") this.err(`unsupported value syntax`);
     if (c === "[") return this.parseList();
     if (c === "(") return this.parseGenericTuple();
     if (
