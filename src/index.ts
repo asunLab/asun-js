@@ -847,36 +847,36 @@ class PrettyFmt {
       }
       return;
     }
-    while (
-      this.pos < this.src.length &&
-      ![",", ")", "]"].includes(this.src[this.pos]!)
-    ) {
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos);
+      // ',' 0x2c, ')' 0x29, ']' 0x5d
+      if (c === 0x2c || c === 0x29 || c === 0x5d) break;
       this.out += this.src[this.pos++]!;
     }
   }
 
   skipWhitespace(): void {
-    while (
-      this.pos < this.src.length &&
-      [" ", "\t", "\n", "\r"].includes(this.src[this.pos]!)
-    )
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos);
+      if (c !== 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d) break;
       this.pos++;
+    }
   }
 
   skipNewlines(): void {
-    while (
-      this.pos < this.src.length &&
-      ["\n", "\r"].includes(this.src[this.pos]!)
-    )
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos);
+      if (c !== 0x0a && c !== 0x0d) break;
       this.pos++;
+    }
   }
 
   skipWhitespaceAndCommas(): void {
-    while (
-      this.pos < this.src.length &&
-      [" ", "\t", "\n", "\r", ","].includes(this.src[this.pos]!)
-    )
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos);
+      if (c !== 0x20 && c !== 0x09 && c !== 0x0a && c !== 0x0d && c !== 0x2c) break;
       this.pos++;
+    }
   }
 }
 
@@ -896,18 +896,34 @@ class Decoder {
     throw new AsunError(`${msg} at pos ${this.pos}`);
   }
 
+  /** True if `pos` is at end-of-input or at a value-position terminator
+   *  (`,` `)` `]`). Hot — uses charCode to avoid the per-char allocation
+   *  that `this.src[pos]` and `[...].includes()` would trigger in V8. */
+  private atValueEnd(): boolean {
+    if (this.pos >= this.src.length) return true;
+    const c = this.src.charCodeAt(this.pos);
+    return c === 0x2c /* , */ || c === 0x29 /* ) */ || c === 0x5d /* ] */;
+  }
+
   skip(): void {
     while (this.pos < this.src.length) {
-      const c = this.src[this.pos]!;
-      if (c === " " || c === "\t" || c === "\n" || c === "\r") {
+      const c = this.src.charCodeAt(this.pos);
+      if (c === 0x20 || c === 0x09 || c === 0x0a || c === 0x0d) {
         this.pos++;
         continue;
       }
-      if (c === "/" && this.src[this.pos + 1] === "*") {
+      // '/' '*' = 0x2f 0x2a — block comment opener.
+      if (
+        c === 0x2f &&
+        this.src.charCodeAt(this.pos + 1) === 0x2a
+      ) {
         this.pos += 2;
         while (
           this.pos + 1 < this.src.length &&
-          !(this.src[this.pos] === "*" && this.src[this.pos + 1] === "/")
+          !(
+            this.src.charCodeAt(this.pos) === 0x2a &&
+            this.src.charCodeAt(this.pos + 1) === 0x2f
+          )
         )
           this.pos++;
         this.pos += 2;
@@ -987,23 +1003,24 @@ class Decoder {
   }
 
   parseTuple(fields: Field[]): AsunObj {
-    if (this.src[this.pos] !== "(") this.err(`expected '('`);
+    if (this.src.charCodeAt(this.pos) !== 0x28 /* ( */) this.err(`expected '('`);
     this.pos++;
     const obj: AsunObj = {};
 
     for (let i = 0; i < fields.length; i++) {
       this.skip();
       if (i > 0) {
-        if (this.src[this.pos] !== ",") this.err(`expected ','`);
+        if (this.src.charCodeAt(this.pos) !== 0x2c /* , */) this.err(`expected ','`);
         this.pos++;
         this.skip();
       }
       const field = fields[i]!;
-      if (
-        this.src[this.pos] === ")" ||
-        this.src[this.pos] === "," ||
-        this.pos >= this.src.length
-      ) {
+      if (this.pos >= this.src.length) {
+        obj[field.name] = null;
+        continue;
+      }
+      const cc = this.src.charCodeAt(this.pos);
+      if (cc === 0x29 /* ) */ || cc === 0x2c /* , */) {
         obj[field.name] = null;
         continue;
       }
@@ -1011,7 +1028,7 @@ class Decoder {
     }
 
     this.skip();
-    if (this.src[this.pos] !== ")") this.err(`expected ')'`);
+    if (this.src.charCodeAt(this.pos) !== 0x29 /* ) */) this.err(`expected ')'`);
     this.pos++;
     return obj;
   }
@@ -1021,11 +1038,7 @@ class Decoder {
     const stripped = stripOptional(typeExpr);
     const inner = stripped.inner;
     const isOptional = optional || stripped.optional;
-    if (
-      this.pos >= this.src.length ||
-      [",", ")", "]"].includes(this.src[this.pos]!)
-    )
-      return null;
+    if (this.atValueEnd()) return null;
 
     switch (baseTypeFromExpr(inner)) {
       case "auto":
@@ -1051,18 +1064,14 @@ class Decoder {
 
   parseGenericValue(): unknown {
     this.skip();
-    if (
-      this.pos >= this.src.length ||
-      [",", ")", "]"].includes(this.src[this.pos]!)
-    )
-      return null;
-    const c = this.src[this.pos]!;
-    if (c === '"') return this.parseQuotedString();
-    if (c === "<") this.err(`unsupported value syntax`);
-    if (c === "[") return this.parseList();
-    if (c === "(") {
+    if (this.atValueEnd()) return null;
+    const cc = this.src.charCodeAt(this.pos);
+    if (cc === 0x22 /* " */) return this.parseQuotedString();
+    if (cc === 0x3c /* < */) this.err(`unsupported value syntax`);
+    if (cc === 0x5b /* [ */) return this.parseList();
+    if (cc === 0x28 /* ( */) {
       // `()` is the untyped null marker.
-      if (this.src[this.pos + 1] === ")") {
+      if (this.src.charCodeAt(this.pos + 1) === 0x29 /* ) */) {
         this.pos += 2;
         return null;
       }
@@ -1073,51 +1082,51 @@ class Decoder {
       this.src.startsWith("false", this.pos)
     )
       return this.parseBool();
-    const token = trimAsciiWs(this.parsePlainToken([",", ")", "]"]));
+    const token = trimAsciiWs(this.parsePlainToken());
     if (token === "") return null;
     const scalar = parseScalarToken(token);
     if (scalar !== undefined) return scalar;
     return token.includes("\\") ? unescapePlain(token) : token;
   }
 
-  parsePlainToken(terminators: string[]): string {
+  /** Scan a plain (unquoted) token until the next top-level value
+   *  terminator (`,` `)` `]`). Tracks paren/bracket depth so `(1,2,3)` and
+   *  `[1,2,3]` inside a token don't split early. Hot path: charCode-based,
+   *  no per-char string allocations. */
+  parsePlainToken(): string {
     const start = this.pos;
     let depthParen = 0;
     let depthBracket = 0;
     let inQuote = false;
 
     while (this.pos < this.src.length) {
-      const c = this.src[this.pos]!;
+      const c = this.src.charCodeAt(this.pos);
       if (inQuote) {
-        if (c === "\\") {
+        if (c === 0x5c /* \ */) {
           this.pos += 2;
           continue;
         }
         this.pos++;
-        if (c === '"') inQuote = false;
+        if (c === 0x22 /* " */) inQuote = false;
         continue;
       }
-      if (c === '"') {
+      if (c === 0x22 /* " */) {
         inQuote = true;
         this.pos++;
         continue;
       }
-      if (c === "(") depthParen++;
-      else if (c === ")") {
-        if (depthParen === 0 && terminators.includes(c)) break;
-        if (depthParen > 0) depthParen--;
-      } else if (c === "[") depthBracket++;
-      else if (c === "]") {
-        if (depthBracket === 0 && terminators.includes(c)) break;
-        if (depthBracket > 0) depthBracket--;
-      } else if (
-        depthParen === 0 &&
-        depthBracket === 0 &&
-        terminators.includes(c)
-      ) {
+      if (c === 0x28 /* ( */) depthParen++;
+      else if (c === 0x29 /* ) */) {
+        if (depthParen === 0) break;
+        depthParen--;
+      } else if (c === 0x5b /* [ */) depthBracket++;
+      else if (c === 0x5d /* ] */) {
+        if (depthBracket === 0) break;
+        depthBracket--;
+      } else if (c === 0x2c /* , */ && depthParen === 0 && depthBracket === 0) {
         break;
       }
-      if (c === "\\") this.pos += 2;
+      if (c === 0x5c /* \ */) this.pos += 2;
       else this.pos++;
     }
 
@@ -1125,29 +1134,29 @@ class Decoder {
   }
 
   parseGenericTuple(): unknown[] {
-    if (this.src[this.pos] !== "(") this.err(`expected '('`);
+    if (this.src.charCodeAt(this.pos) !== 0x28 /* ( */) this.err(`expected '('`);
     this.pos++;
     const out: unknown[] = [];
     while (this.pos < this.src.length) {
       this.skip();
-      if (this.src[this.pos] === ")") {
+      if (this.src.charCodeAt(this.pos) === 0x29 /* ) */) {
         this.pos++;
         break;
       }
       out.push(this.parseGenericValue());
       this.skip();
-      if (this.src[this.pos] === ",") this.pos++;
+      if (this.src.charCodeAt(this.pos) === 0x2c /* , */) this.pos++;
     }
     return out;
   }
 
   parseList(itemTypeExpr?: string): unknown[] {
-    if (this.src[this.pos] !== "[") this.err(`expected '['`);
+    if (this.src.charCodeAt(this.pos) !== 0x5b /* [ */) this.err(`expected '['`);
     this.pos++;
     const out: unknown[] = [];
     while (this.pos < this.src.length) {
       this.skip();
-      if (this.src[this.pos] === "]") {
+      if (this.src.charCodeAt(this.pos) === 0x5d /* ] */) {
         this.pos++;
         break;
       }
@@ -1157,7 +1166,7 @@ class Decoder {
           : this.parseGenericValue(),
       );
       this.skip();
-      if (this.src[this.pos] === ",") this.pos++;
+      if (this.src.charCodeAt(this.pos) === 0x2c /* , */) this.pos++;
     }
     return out;
   }
@@ -1175,13 +1184,9 @@ class Decoder {
   }
 
   parseInt(): number | null {
-    if (
-      this.pos >= this.src.length ||
-      [",", ")", "]"].includes(this.src[this.pos]!)
-    )
-      return null;
+    if (this.atValueEnd()) return null;
     let neg = false;
-    if (this.src[this.pos] === "-") {
+    if (this.src.charCodeAt(this.pos) === 0x2d /* - */) {
       neg = true;
       this.pos++;
     }
@@ -1198,40 +1203,33 @@ class Decoder {
   }
 
   parseFloat(): number | null {
-    if (
-      this.pos >= this.src.length ||
-      [",", ")", "]"].includes(this.src[this.pos]!)
-    )
-      return null;
+    if (this.atValueEnd()) return null;
     const start = this.pos;
-    if (this.src[this.pos] === "-") this.pos++;
-    while (
-      this.pos < this.src.length &&
-      this.src[this.pos] >= "0" &&
-      this.src[this.pos] <= "9"
-    )
+    if (this.src.charCodeAt(this.pos) === 0x2d /* - */) this.pos++;
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos);
+      if (c < 0x30 || c > 0x39) break;
       this.pos++;
-    if (this.src[this.pos] === ".") {
+    }
+    if (this.src.charCodeAt(this.pos) === 0x2e /* . */) {
       this.pos++;
-      while (
-        this.pos < this.src.length &&
-        this.src[this.pos] >= "0" &&
-        this.src[this.pos] <= "9"
-      )
+      while (this.pos < this.src.length) {
+        const c = this.src.charCodeAt(this.pos);
+        if (c < 0x30 || c > 0x39) break;
         this.pos++;
+      }
     }
     if (this.pos === start) this.err(`invalid float`);
     return Number.parseFloat(this.src.slice(start, this.pos));
   }
 
   parseString(): string {
-    if (this.src[this.pos] === '"') return this.parseQuotedString();
+    if (this.src.charCodeAt(this.pos) === 0x22 /* " */) return this.parseQuotedString();
     const start = this.pos;
-    while (
-      this.pos < this.src.length &&
-      ![",", ")", "]"].includes(this.src[this.pos]!)
-    ) {
-      if (this.src[this.pos] === "\\") this.pos += 2;
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos);
+      if (c === 0x2c /* , */ || c === 0x29 /* ) */ || c === 0x5d /* ] */) break;
+      if (c === 0x5c /* \ */) this.pos += 2;
       else this.pos++;
     }
     const raw = trimAsciiWs(this.src.slice(start, this.pos));
@@ -1240,31 +1238,55 @@ class Decoder {
   }
 
   parseQuotedString(): string {
-    this.pos++;
-    const parts: string[] = [];
+    this.pos++; // consume opening "
+    const start = this.pos;
+
+    // Fast path: scan for `"` or `\` without building any intermediate
+    // strings. If the string has no escapes, return a single slice — V8
+    // makes this a SlicedString (no copy) in many cases.
     while (this.pos < this.src.length) {
-      const c = this.src[this.pos++]!;
-      if (c === '"') break;
-      if (c === "\\") {
-        const esc = this.src[this.pos++]!;
-        if (esc === "n") parts.push("\n");
-        else if (esc === "r") parts.push("\r");
-        else if (esc === "t") parts.push("\t");
-        else if (esc === "b") parts.push("\b");
-        else if (esc === "f") parts.push("\f");
-        else if (esc === "u") {
+      const c = this.src.charCodeAt(this.pos);
+      if (c === 0x22 /* " */) {
+        const out = this.src.slice(start, this.pos);
+        this.pos++;
+        return out;
+      }
+      if (c === 0x5c /* \ */) break; // fall through to slow path
+      this.pos++;
+    }
+
+    if (this.pos >= this.src.length) {
+      // Unterminated; emit what we have for caller-side error consistency.
+      return this.src.slice(start, this.pos);
+    }
+
+    // Slow path: at least one backslash. Capture the prefix already scanned,
+    // then append byte-by-byte while interpreting escapes.
+    let out = this.src.slice(start, this.pos);
+    while (this.pos < this.src.length) {
+      const c = this.src.charCodeAt(this.pos++);
+      if (c === 0x22 /* " */) break;
+      if (c === 0x5c /* \ */) {
+        const esc = this.src.charCodeAt(this.pos++);
+        if (esc === 0x6e /* n */) out += "\n";
+        else if (esc === 0x72 /* r */) out += "\r";
+        else if (esc === 0x74 /* t */) out += "\t";
+        else if (esc === 0x62 /* b */) out += "\b";
+        else if (esc === 0x66 /* f */) out += "\f";
+        else if (esc === 0x75 /* u */) {
           const hex = this.src.slice(this.pos, this.pos + 4);
           if (hex.length < 4 || !/^[0-9a-fA-F]{4}$/.test(hex))
             this.err(`invalid unicode escape`);
-          parts.push(String.fromCharCode(parseInt(hex, 16)));
+          out += String.fromCharCode(parseInt(hex, 16));
           this.pos += 4;
+        } else {
+          out += String.fromCharCode(esc);
         }
-        else parts.push(esc);
       } else {
-        parts.push(c);
+        out += String.fromCharCode(c);
       }
     }
-    return parts.join("");
+    return out;
   }
 }
 
