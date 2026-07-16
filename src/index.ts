@@ -44,6 +44,23 @@ for (const ch of [",", "@", "(", ")", "[", "]", "{", "}", ":", "<", ">", "/", "*
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder();
 
+// Assign a decoded field onto a result object. Plain assignment with a
+// user-controlled key of "__proto__" would mutate the object's prototype
+// instead of creating an own property (prototype pollution); defineProperty
+// always creates an own, enumerable data property regardless of the key.
+function setField(obj: AsunObj, key: string, value: unknown): void {
+  if (key === "__proto__" || key === "constructor" || key === "prototype") {
+    Object.defineProperty(obj, key, {
+      value,
+      writable: true,
+      enumerable: true,
+      configurable: true,
+    });
+  } else {
+    obj[key] = value;
+  }
+}
+
 const _f64Buf = new ArrayBuffer(8);
 const _f64View = new DataView(_f64Buf);
 const _f64Bytes = new Uint8Array(_f64Buf);
@@ -508,7 +525,11 @@ function encodeStr(s: string): string {
 }
 
 function formatFloat(v: number): string {
-  if (!isFinite(v)) return "0";
+  if (!isFinite(v)) {
+    throw new AsunError(
+      `cannot encode non-finite float (NaN/Infinity)`,
+    );
+  }
   if (Object.is(v, -0)) return "0";
   if (Number.isInteger(v) && Math.abs(v) < 1e21) return v.toFixed(1);
   // Default JS formatting handles scientific notation for very large/small
@@ -1016,15 +1037,15 @@ class Decoder {
       }
       const field = fields[i]!;
       if (this.pos >= this.src.length) {
-        obj[field.name] = null;
+        setField(obj, field.name, null);
         continue;
       }
       const cc = this.src.charCodeAt(this.pos);
       if (cc === 0x29 /* ) */ || cc === 0x2c /* , */) {
-        obj[field.name] = null;
+        setField(obj, field.name, null);
         continue;
       }
-      obj[field.name] = this.parseTypeExpr(field.typeExpr, field.optional);
+      setField(obj, field.name, this.parseTypeExpr(field.typeExpr, field.optional));
     }
 
     this.skip();
@@ -1183,23 +1204,23 @@ class Decoder {
     this.err(`invalid bool`);
   }
 
-  parseInt(): number | null {
+  parseInt(): number | bigint | null {
     if (this.atValueEnd()) return null;
-    let neg = false;
-    if (this.src.charCodeAt(this.pos) === 0x2d /* - */) {
-      neg = true;
-      this.pos++;
-    }
+    const tokenStart = this.pos;
+    if (this.src.charCodeAt(this.pos) === 0x2d /* - */) this.pos++;
     const start = this.pos;
-    let v = 0;
     while (this.pos < this.src.length) {
       const c = this.src.charCodeAt(this.pos);
       if (c < 48 || c > 57) break;
-      v = v * 10 + (c - 48);
       this.pos++;
     }
     if (this.pos === start) this.err(`invalid int`);
-    return neg ? -v : v;
+    const token = this.src.slice(tokenStart, this.pos);
+    const n = Number(token);
+    // Beyond 2^53 a double can no longer represent every integer exactly;
+    // preserve int64-range precision by returning a BigInt instead.
+    if (!Number.isSafeInteger(n)) return BigInt(token);
+    return n;
   }
 
   parseFloat(): number | null {
@@ -1292,7 +1313,7 @@ class Decoder {
 
 function parseScalarToken(
   token: string,
-): string | number | boolean | undefined {
+): string | number | bigint | boolean | undefined {
   if (token === "true") return true;
   if (token === "false") return false;
 
@@ -1346,7 +1367,11 @@ function parseScalarToken(
   }
 
   if (i !== token.length) return undefined;
-  return seenDot || seenExp ? Number.parseFloat(token) : Number.parseInt(token, 10);
+  if (seenDot || seenExp) return Number.parseFloat(token);
+  const n = Number(token);
+  // Preserve int64-range precision for integers beyond the safe double range.
+  if (!Number.isSafeInteger(n)) return BigInt(token);
+  return n;
 }
 
 function unescapePlain(s: string): string {
@@ -1399,28 +1424,23 @@ class BinWriter {
     this.buf[this.len++] = byte;
   }
 
-  pushU32LE(value: number): void {
-    this.grow(4);
-    this.buf[this.len++] = value & 0xff;
-    this.buf[this.len++] = (value >>> 8) & 0xff;
-    this.buf[this.len++] = (value >>> 16) & 0xff;
-    this.buf[this.len++] = (value >>> 24) & 0xff;
+  // LEB128 unsigned varint.
+  pushUvarint(value: number | bigint): void {
+    let v = typeof value === "bigint" ? value : BigInt(Math.trunc(Number(value)));
+    v &= 0xffffffffffffffffn; // treat as unsigned 64-bit
+    while (v >= 0x80n) {
+      this.push(Number(v & 0x7fn) | 0x80);
+      v >>= 7n;
+    }
+    this.push(Number(v));
   }
 
-  pushI64LE(value: number | bigint): void {
-    this.grow(8);
-    const big =
+  // zigzag + LEB128 signed varint.
+  pushIvarint(value: number | bigint): void {
+    const v =
       typeof value === "bigint" ? value : BigInt(Math.trunc(Number(value)));
-    const lo = Number(big & 0xffffffffn);
-    const hi = Number((big >> 32n) & 0xffffffffn);
-    this.buf[this.len++] = lo & 0xff;
-    this.buf[this.len++] = (lo >>> 8) & 0xff;
-    this.buf[this.len++] = (lo >>> 16) & 0xff;
-    this.buf[this.len++] = (lo >>> 24) & 0xff;
-    this.buf[this.len++] = hi & 0xff;
-    this.buf[this.len++] = (hi >>> 8) & 0xff;
-    this.buf[this.len++] = (hi >>> 16) & 0xff;
-    this.buf[this.len++] = (hi >>> 24) & 0xff;
+    const zig = ((v << 1n) ^ (v >> 63n)) & 0xffffffffffffffffn;
+    this.pushUvarint(zig);
   }
 
   pushF64LE(value: number): void {
@@ -1468,21 +1488,21 @@ function writeBinByTypeExpr(
       writer.push(value ? 1 : 0);
       break;
     case "int":
-      writer.pushI64LE(value as number | bigint);
+      writer.pushIvarint(value as number | bigint);
       break;
     case "float":
       writer.pushF64LE(Number(value));
       break;
     case "str": {
       const bytes = textEncoder.encode(String(value ?? ""));
-      writer.pushU32LE(bytes.length);
+      writer.pushUvarint(bytes.length);
       writer.pushBytes(bytes);
       break;
     }
     case "list": {
       const itemExpr = inner.slice(1, -1).trim() || "str";
       const items = Array.isArray(value) ? value : [];
-      writer.pushU32LE(items.length);
+      writer.pushUvarint(items.length);
       for (const item of items) writeBinByTypeExpr(writer, item, itemExpr);
       break;
     }
@@ -1507,7 +1527,7 @@ export function encodeBinary(obj: AsunResult): Uint8Array {
     const writer = new BinWriter(
       Math.max(64, obj.length * Math.max(fields.length, 1) * 16),
     );
-    writer.pushU32LE(obj.length);
+    writer.pushUvarint(obj.length);
     for (const row of obj) {
       for (const field of fields)
         writeBinByTypeExpr(
@@ -1527,12 +1547,6 @@ export function encodeBinary(obj: AsunResult): Uint8Array {
   return writer.finish();
 }
 
-function readI64LE(view: DataView, pos: number): number {
-  const lo = view.getUint32(pos, true);
-  const hi = view.getInt32(pos + 4, true);
-  return Number((BigInt(hi) << 32n) | BigInt(lo));
-}
-
 class BinDecoder {
   view: DataView;
   pos = 0;
@@ -1541,10 +1555,51 @@ class BinDecoder {
     this.view = new DataView(data.buffer, data.byteOffset, data.byteLength);
   }
 
+  // Ensures `n` more bytes are available from the current position, throwing a
+  // structured AsunError (rather than a native RangeError from the DataView)
+  // on truncated or malformed input.
+  private need(n: number): void {
+    if (this.pos + n > this.view.byteLength) {
+      throw new AsunError(
+        `binary decode: unexpected EOF (need ${n} byte(s) at ${this.pos}, have ${this.view.byteLength})`,
+      );
+    }
+  }
+
+  private readU8(): number {
+    this.need(1);
+    return this.view.getUint8(this.pos++);
+  }
+
+  // Reads an LEB128 unsigned varint as a BigInt.
+  readUvarint(): bigint {
+    let result = 0n;
+    let shift = 0n;
+    const limit = this.view.byteLength;
+    while (true) {
+      if (this.pos >= limit) {
+        throw new AsunError("binary decode: unexpected EOF reading varint");
+      }
+      const b = this.view.getUint8(this.pos++);
+      if (shift >= 64n) {
+        throw new AsunError("binary decode: varint overflow");
+      }
+      result |= BigInt(b & 0x7f) << shift;
+      if ((b & 0x80) === 0) return result & 0xffffffffffffffffn;
+      shift += 7n;
+    }
+  }
+
+  // Reads a zigzag + LEB128 signed varint as a BigInt.
+  readIvarint(): bigint {
+    const v = this.readUvarint();
+    return (v >> 1n) ^ -(v & 1n);
+  }
+
   readStruct(fields: Field[]): AsunObj {
     const out: AsunObj = {};
     for (const field of fields)
-      out[field.name] = this.readByTypeExpr(field.typeExpr, field.optional);
+      setField(out, field.name, this.readByTypeExpr(field.typeExpr, field.optional));
     return out;
   }
 
@@ -1553,7 +1608,7 @@ class BinDecoder {
     const inner = stripped.inner;
     const isOptional = optional || stripped.optional;
     if (isOptional) {
-      const tag = this.view.getUint8(this.pos++);
+      const tag = this.readU8();
       if (tag === 0) return null;
     }
 
@@ -1561,20 +1616,22 @@ class BinDecoder {
       case "auto":
         return this.readByTypeExpr("str", isOptional);
       case "bool":
-        return this.view.getUint8(this.pos++) !== 0;
+        return this.readU8() !== 0;
       case "int": {
-        const value = readI64LE(this.view, this.pos);
-        this.pos += 8;
-        return value;
+        const value = this.readIvarint();
+        // Preserve int64-range precision beyond the safe double range.
+        const n = Number(value);
+        return Number.isSafeInteger(n) ? n : value;
       }
       case "float": {
+        this.need(8);
         const value = this.view.getFloat64(this.pos, true);
         this.pos += 8;
         return value;
       }
       case "str": {
-        const len = this.view.getUint32(this.pos, true);
-        this.pos += 4;
+        const len = Number(this.readUvarint());
+        this.need(len);
         const bytes = new Uint8Array(
           this.view.buffer,
           this.view.byteOffset + this.pos,
@@ -1584,8 +1641,7 @@ class BinDecoder {
         return textDecoder.decode(bytes);
       }
       case "list": {
-        const count = this.view.getUint32(this.pos, true);
-        this.pos += 4;
+        const count = Number(this.readUvarint());
         const itemExpr = inner.slice(1, -1).trim() || "str";
         const out: unknown[] = [];
         for (let i = 0; i < count; i++) out.push(this.readByTypeExpr(itemExpr));
@@ -1603,8 +1659,7 @@ export function decodeBinary(data: Uint8Array, schema: string): AsunResult {
 
   let result: AsunResult;
   if (isSlice) {
-    const count = decoder.view.getUint32(decoder.pos, true);
-    decoder.pos += 4;
+    const count = Number(decoder.readUvarint());
     const rows: AsunObj[] = [];
     for (let i = 0; i < count; i++) rows.push(decoder.readStruct(fields));
     result = rows;
